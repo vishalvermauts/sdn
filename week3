@@ -1,72 +1,75 @@
 #!/bin/bash
 
 # Create network namespaces
-ip netns add h1
-ip netns add h2
-ip netns add h3
+sudo ip netns add h1
+sudo ip netns add h2
+sudo ip netns add h3
 
 # Create OVS switches
-ovs-vsctl add-br sw1
-ovs-vsctl add-br sw2
-ovs-vsctl add-br sw3
+sudo ovs-vsctl add-br sw1
+sudo ovs-vsctl add-br sw2
+sudo ovs-vsctl add-br sw3
 
 # Create veth pairs
-ip link add h1-veth0 type veth peer name sw1-veth0
-ip link add h2-veth0 type veth peer name sw2-veth0
-ip link add h3-veth0 type veth peer name sw3-veth0
-ip link add sw1-veth1 type veth peer name sw2-veth1
-ip link add sw2-veth2 type veth peer name sw3-veth2
-ip link add sw3-veth3 type veth peer name sw1-veth3
+sudo ip link add h1-veth0 type veth peer name sw1-veth0
+sudo ip link add h2-veth0 type veth peer name sw2-veth0
+sudo ip link add h3-veth0 type veth peer name sw3-veth0
+sudo ip link add sw1-veth1 type veth peer name sw2-veth1
+sudo ip link add sw2-veth2 type veth peer name sw3-veth2
+sudo ip link add sw3-veth3 type veth peer name sw1-veth3
 
 # Attach one end of veth pairs to namespaces
-ip link set h1-veth0 netns h1
-ip link set h2-veth0 netns h2
-ip link set h3-veth0 netns h3
+sudo ip link set h1-veth0 netns h1
+sudo ip link set h2-veth0 netns h2
+sudo ip link set h3-veth0 netns h3
 
 # Attach other ends to OVS switches
-ovs-vsctl add-port sw1 sw1-veth0
-ovs-vsctl add-port sw2 sw2-veth0
-ovs-vsctl add-port sw3 sw3-veth0
-ovs-vsctl add-port sw1 sw1-veth1
-ovs-vsctl add-port sw2 sw2-veth1
-ovs-vsctl add-port sw2 sw2-veth2
-ovs-vsctl add-port sw3 sw3-veth2
-ovs-vsctl add-port sw3 sw3-veth3
-ovs-vsctl add-port sw1 sw1-veth3
+sudo ovs-vsctl add-port sw1 sw1-veth0
+sudo ovs-vsctl add-port sw2 sw2-veth0
+sudo ovs-vsctl add-port sw3 sw3-veth0
+sudo ovs-vsctl add-port sw1 sw1-veth1
+sudo ovs-vsctl add-port sw2 sw2-veth1
+sudo ovs-vsctl add-port sw2 sw2-veth2
+sudo ovs-vsctl add-port sw3 sw3-veth2
+sudo ovs-vsctl add-port sw3 sw3-veth3
+sudo ovs-vsctl add-port sw1 sw1-veth3
 
 # Enable interfaces
-ip link set sw1-veth0 up
-ip link set sw2-veth0 up
-ip link set sw3-veth0 up
-ip link set sw1-veth1 up
-ip link set sw2-veth1 up
-ip link set sw2-veth2 up
-ip link set sw3-veth2 up
-ip link set sw3-veth3 up
-ip link set sw1-veth3 up
+sudo ip link set sw1-veth0 up
+sudo ip link set sw2-veth0 up
+sudo ip link set sw3-veth0 up
+sudo ip link set sw1-veth1 up
+sudo ip link set sw2-veth1 up
+sudo ip link set sw2-veth2 up
+sudo ip link set sw3-veth2 up
+sudo ip link set sw3-veth3 up
+sudo ip link set sw1-veth3 up
 
 # Enable veth interfaces inside namespaces
-ip netns exec h1 ip link set h1-veth0 up
-ip netns exec h2 ip link set h2-veth0 up
-ip netns exec h3 ip link set h3-veth0 up
+sudo ip netns exec h1 ip link set h1-veth0 up
+sudo ip netns exec h2 ip link set h2-veth0 up
+sudo ip netns exec h3 ip link set h3-veth0 up
 
 # Assign IP addresses
-ip netns exec h1 ip addr add 10.0.0.1/24 dev h1-veth0
-ip netns exec h2 ip addr add 10.0.0.2/24 dev h2-veth0
-ip netns exec h3 ip addr add 10.0.0.3/24 dev h3-veth0
+sudo ip netns exec h1 ip addr add 10.0.0.1/24 dev h1-veth0
+sudo ip netns exec h2 ip addr add 10.0.0.2/24 dev h2-veth0
+sudo ip netns exec h3 ip addr add 10.0.0.3/24 dev h3-veth0
 
 # Bring OVS switches up
-ip link set sw1 up
-ip link set sw2 up
-ip link set sw3 up
+sudo ip link set sw1 up
+sudo ip link set sw2 up
+sudo ip link set sw3 up
 
 # Test connectivity (will likely fail due to broadcast storm)
 echo "Testing ping from h1 to h2..."
-ip netns exec h1 ping -c 3 10.0.0.2
+sudo ip netns exec h1 ping -c 3 10.0.0.2
 
+# Show network setup
+echo "Showing veth pairs..."
+sudo ip -c link show type veth
 
-show
-
-ip -c link show type veth
+echo "Showing network namespaces..."
 sudo ip netns show
-sudo ovs-vsctl show 
+
+echo "Showing OVS switches..."
+sudo ovs-vsctl show
