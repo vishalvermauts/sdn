@@ -63,3 +63,10 @@ ip link set sw3 up
 # Test connectivity (will likely fail due to broadcast storm)
 echo "Testing ping from h1 to h2..."
 ip netns exec h1 ping -c 3 10.0.0.2
+
+
+show
+
+ip -c link show type veth
+sudo ip netns show
+sudo ovs-vsctl show 
