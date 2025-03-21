@@ -60,9 +60,19 @@ sudo ip link set sw1 up
 sudo ip link set sw2 up
 sudo ip link set sw3 up
 
+
+sudo ovs-vsctl set bridge sw1 stp_enable=true
+sudo ovs-vsctl set bridge sw2 stp_enable=true
+sudo ovs-vsctl set bridge sw3 stp_enable=true
+
+
+
 # Test connectivity (will likely fail due to broadcast storm)
 echo "Testing ping from h1 to h2..."
 sudo ip netns exec h1 ping -c 3 10.0.0.2
+
+
+
 
 # Show network setup
 echo "Showing veth pairs..."
