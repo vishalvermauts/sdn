@@ -1,16 +1,28 @@
-#!/bin/bash
 
-# Create network namespaces
+sudo ip netns del h1
+sudo ip netns del h2
+sudo ip netns del h3
+
+sudo ovs-vsctl del-br sw1
+sudo ovs-vsctl del-br sw2
+sudo ovs-vsctl del-br sw3
+
+sudo ip link del h1-veth0
+sudo ip link del h2-veth0
+sudo ip link del h3-veth0
+sudo ip link del sw1-veth1
+sudo ip link del sw2-veth2
+sudo ip link del sw3-veth3
+
+
 sudo ip netns add h1
 sudo ip netns add h2
 sudo ip netns add h3
 
-# Create OVS switches
 sudo ovs-vsctl add-br sw1
 sudo ovs-vsctl add-br sw2
 sudo ovs-vsctl add-br sw3
 
-# Create veth pairs
 sudo ip link add h1-veth0 type veth peer name sw1-veth0
 sudo ip link add h2-veth0 type veth peer name sw2-veth0
 sudo ip link add h3-veth0 type veth peer name sw3-veth0
@@ -18,12 +30,10 @@ sudo ip link add sw1-veth1 type veth peer name sw2-veth1
 sudo ip link add sw2-veth2 type veth peer name sw3-veth2
 sudo ip link add sw3-veth3 type veth peer name sw1-veth3
 
-# Attach one end of veth pairs to namespaces
 sudo ip link set h1-veth0 netns h1
 sudo ip link set h2-veth0 netns h2
 sudo ip link set h3-veth0 netns h3
 
-# Attach other ends to OVS switches
 sudo ovs-vsctl add-port sw1 sw1-veth0
 sudo ovs-vsctl add-port sw2 sw2-veth0
 sudo ovs-vsctl add-port sw3 sw3-veth0
@@ -34,7 +44,6 @@ sudo ovs-vsctl add-port sw3 sw3-veth2
 sudo ovs-vsctl add-port sw3 sw3-veth3
 sudo ovs-vsctl add-port sw1 sw1-veth3
 
-# Enable interfaces
 sudo ip link set sw1-veth0 up
 sudo ip link set sw2-veth0 up
 sudo ip link set sw3-veth0 up
@@ -45,41 +54,21 @@ sudo ip link set sw3-veth2 up
 sudo ip link set sw3-veth3 up
 sudo ip link set sw1-veth3 up
 
-# Enable veth interfaces inside namespaces
 sudo ip netns exec h1 ip link set h1-veth0 up
 sudo ip netns exec h2 ip link set h2-veth0 up
 sudo ip netns exec h3 ip link set h3-veth0 up
 
-# Assign IP addresses
 sudo ip netns exec h1 ip addr add 10.0.0.1/24 dev h1-veth0
 sudo ip netns exec h2 ip addr add 10.0.0.2/24 dev h2-veth0
 sudo ip netns exec h3 ip addr add 10.0.0.3/24 dev h3-veth0
 
-# Bring OVS switches up
 sudo ip link set sw1 up
 sudo ip link set sw2 up
 sudo ip link set sw3 up
 
 
+
+
 sudo ovs-vsctl set bridge sw1 stp_enable=true
 sudo ovs-vsctl set bridge sw2 stp_enable=true
 sudo ovs-vsctl set bridge sw3 stp_enable=true
-
-
-
-# Test connectivity (will likely fail due to broadcast storm)
-echo "Testing ping from h1 to h2..."
-sudo ip netns exec h1 ping -c 3 10.0.0.2
-
-
-
-
-# Show network setup
-echo "Showing veth pairs..."
-sudo ip -c link show type veth
-
-echo "Showing network namespaces..."
-sudo ip netns show
-
-echo "Showing OVS switches..."
-sudo ovs-vsctl show
