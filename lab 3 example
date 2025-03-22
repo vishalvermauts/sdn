@@ -65,3 +65,85 @@ sudo ovs-vsctl add-port ovs2 ovs2-eth3 trunk=10,20
 
 sudo ip netns exec h1 ping -c3 13.13.13.3
 sudo ip netns exec h2 ping -c3 24.24.24.4
+
+
+sudo ip netns del h1
+sudo ip netns del h2
+sudo ip netns del h3
+sudo ip netns del h4
+
+
+sudo ovs-vsctl del-br ovs1
+sudo ovs-vsctl del-br ovs2
+
+sudo ip link del h1-eth0
+sudo ip link del h2-eth0
+sudo ip link del h3-eth0
+sudo ip link del h4-eth0
+sudo ip link del ovs1-eth1
+sudo ip link del ovs1-eth2
+sudo ip link del ovs1-eth3
+sudo ip link del ovs2-eth1
+sudo ip link del ovs2-eth2
+sudo ip link del ovs2-eth3
+
+####ROUTING 
+
+sudo ip netns add h1
+sudo ip netns add h2
+sudo ip netns add R1
+sudo ip netns add R2
+
+
+sudo ip link add h1-eth0 type veth peer name R1-1
+sudo ip link add h2-eth0 type veth peer name R2-1
+sudo ip link add R1-2 type veth peer name R2-2
+
+
+
+sudo ip link set h1-eth0 netns h1
+sudo ip link set h2-eth0 netns h2
+sudo ip link set R1-1 netns R1
+sudo ip link set R1-2 netns R1
+sudo ip link set R2-1 netns R2
+sudo ip link set R2-2 netns R2
+
+
+sudo ip netns exec h1 ifconfig h1-eth0 12.0.0.11
+sudo ip netns exec h2 ifconfig h2-eth0 21.0.0.22
+sudo ip netns exec R1 ifconfig R1-1 12.0.0.1
+sudo ip netns exec R2 ifconfig R2-1 21.0.0.1
+sudo ip netns exec R1 ifconfig R1-2 2.0.0.1
+sudo ip netns exec R2 ifconfig R2-2 2.0.0.2
+
+
+
+
+# Ping tests before adding routes
+sudo ip netns exec h1 ping -c 4 12.0.0.1
+sudo ip netns exec h1 ping -c 4 21.0.0.2
+
+# Adding default routes for h1 and h2
+sudo ip netns exec h1 route add -net 0.0.0.0 netmask 0.0.0.0 gw 12.0.0.1
+sudo ip netns exec h2 route add -net 0.0.0.0 netmask 0.0.0.0 gw 21.0.0.1
+
+# Ping tests after adding default routes
+sudo ip netns exec h1 ping -c 4 12.0.0.1
+sudo ip netns exec h1 ping -c 4 21.0.0.2
+
+# Adding routes in routers R1 and R2 for interconnectivity
+sudo ip netns exec R1 route add -net 21.0.0.0 netmask 255.0.0.0 gw 2.0.0.2
+sudo ip netns exec R2 route add -net 12.0.0.0 netmask 255.0.0.0 gw 2.0.0.1
+
+# Display routing tables for verification
+sudo ip netns exec R2 ip route list
+sudo ip netns exec R1 ip route list
+
+# Enable IP forwarding in R1 and R2
+sudo ip netns exec R1 sysctl -w net.ipv4.ip_forward=1
+sudo ip netns exec R2 sysctl -w net.ipv4.ip_forward=1
+
+# Final ping tests to check end-to-end connectivity
+sudo ip netns exec h1 ping -c 4 2.0.0.2
+sudo ip netns exec h1 ping -c 4 21.0.0.22
+
