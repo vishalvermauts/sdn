@@ -1,0 +1,40 @@
+sudo ip netns add h1
+sudo ip netns add h2
+sudo ip netns add h3
+sudo ip netns add h4
+
+sudo ovs-vsctl add-br ovs1
+sudo ovs-vsctl add-br ovs2
+
+sudo ip link add h1-eth0 type veth peer name ovs1-eth1
+sudo ip link add h2-eth0 type veth peer name ovs1-eth2
+sudo ip link add h3-eth0 type veth peer name ovs2-eth1
+sudo ip link add h4-eth0 type veth peer name ovs2-eth2
+
+sudo ip link add ovs1-eth3 type veth peer name ovs2-eth3
+
+sudo ip link set h1-eth0 netns h1
+sudo ip link set h2-eth0 netns h2
+sudo ip link set h3-eth0 netns h3
+sudo ip link set h4-eth0 netns h4
+
+sudo ovs-vsctl add-port ovs1 ovs1-eth1
+sudo ovs-vsctl add-port ovs1 ovs1-eth2
+sudo ovs-vsctl add-port ovs1 ovs1-eth3
+sudo ovs-vsctl add-port ovs2 ovs2-eth1
+sudo ovs-vsctl add-port ovs2 ovs2-eth2
+sudo ovs-vsctl add-port ovs2 ovs2-eth3
+
+sudo ip netns exec h1 ifconfig h1-eth0 10.10.10.1
+sudo ip netns exec h2 ifconfig h2-eth0 10.10.10.2
+sudo ip netns exec h3 ifconfig h3-eth0 10.10.10.3
+sudo ip netns exec h4 ifconfig h4-eth0 10.10.10.4
+
+sudo ifconfig ovs1-eth1 up
+sudo ifconfig ovs1-eth2 up
+sudo ifconfig ovs1-eth3 up
+sudo ifconfig ovs2-eth1 up
+sudo ifconfig ovs2-eth2 up
+sudo ifconfig ovs2-eth3 up
+
+sudo ip netns exec h1 ping -c1 10.10.10.3
