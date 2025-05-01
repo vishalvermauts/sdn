@@ -1,0 +1,120 @@
+from ryu.controller import ofp_event
+from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER
+from ryu.controller.handler import set_ev_cls
+from ryu.ofproto import ofproto_v1_3
+from ryu.lib.packet import packet
+from ryu.lib.packet import ethernet, arp, ipv4
+from ryu.lib.packet import ether_types
+from ryu.lib.dpid import dpid_to_str, str_to_dpid
+
+class SimpleL2Switch(app_manager.RyuApp):  # creating a simple switch as a Ryu App
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    ##### SECTION -1 #################
+
+    def __init__(self, *args, **kwargs):
+        super(SimpleL2Switch, self).__init__(*args, **kwargs)  # simpleL2switch is a child of Ryu App.
+        self.mac_to_port = {}  # {port1: [mac1, ip1], port2: [mac2, ip2], ...}, to store the details of switch and connected hosts IP and mac address
+
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    def switch_features_handler(self, event):  # handles switch feature requests and installs initial flow to forward all packets to the controller in case of a table miss
+        print(" *** in feature handler *** ")
+        # send to the controller
+
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def _packet_in_handler(self, event):
+        pkt = packet.Packet(data=event.msg.data)  # create a packet with msg's data as payload
+        eth = pkt.get_protocols(ethernet.ethernet)[0]  # fetch ethernet dataframe
+
+        if eth.ethertype == ether_types.ETH_TYPE_ARP:  # handling ARP requests
+            # ARP packet is ethernet frame's payload. If ethertype is ETH_TYPE_ARP, handle ARP
+            # call method to handle ARP packets
+            pass
+        elif eth.ethertype == ether_types.ETH_TYPE_IP:  # handle IP packet
+            # call method to handle IP packet
+            pass
+
+    ######### SECTION -2 ###############
+
+    def handle_ARP(self, event):  # handle ARP packets
+        datapath = event.msg.datapath  # datapath connection
+        ofproto = datapath.ofproto  # ofproto of the datapath
+        in_port = event.msg.match['in_port']  # port through which the switch received this packet
+        parser = datapath.ofproto_parser
+        pkt = packet.Packet(data=event.msg.data)
+        eth = pkt.get_protocols(ethernet.ethernet)[0]  # fetch ethernet dataframe
+        arp_pkt = pkt.get_protocol(arp.arp)  # extract ARP packet
+
+        self.mac_to_port[in_port] = [arp_pkt.src_mac, arp_pkt.src_ip]  # store ARP info
+        out_port = self.check_mactable(ofproto, 'arp', arp_pkt.dst_mac)  # check if destination mac exists in mac table
+        actions = [parser.OFPActionOutput(out_port)]  # output action to the port
+        match = self.simplematch(parser, eth.src, eth.dst, in_port)  # create match for flow entry
+        self.add_flow(datapath, 1, match, actions, buffer_id=None)  # add flow for ARP packet
+
+    def handle_IP(self, event):  # handle IP packets
+        datapath = event.msg.datapath  # datapath connection
+        ofproto = datapath.ofproto  # ofproto of the datapath
+        in_port = event.msg.match['in_port']  # port through which the switch received this packet
+        parser = datapath.ofproto_parser
+        pkt = packet.Packet(data=event.msg.data)
+        eth = pkt.get_protocols(ethernet.ethernet)[0]  # fetch ethernet dataframe
+        ip_pkt = pkt.get_protocol(ipv4.ipv4)  # extract IP payload
+        out_port = self.check_mactable(ofproto, 'ip', ip_pkt.dst)  # check if destination IP exists in mac table
+        match = self.simplematch(parser, eth.src, eth.dst, in_port)  # create match for flow entry
+        actions = [parser.OFPActionOutput(port=out_port)]  # output action to the port
+
+        if event.msg.buffer_id != ofproto.OFP_NO_BUFFER:
+            self.add_flow(datapath, 1, match, actions, event.msg.buffer_id)  # add flow with buffer id if available
+        else:
+            self.add_flow(datapath, 1, match, actions)
+
+    def check_mactable(self, ofproto, caller, para):  # to check if a MAC or IP address exists in mac table
+        if caller == 'arp':  # if caller is ARP, check MAC address
+            for p in self.mac_to_port:
+                if self.mac_to_port[p][0] == para:  # check if MAC matches
+                    return p  # return port if found
+        elif caller == 'ip':  # if caller is IP, check IP address
+            for p in self.mac_to_port:
+                if self.mac_to_port[p][1] == para:  # check if IP matches
+                    return p  # return corresponding port
+        return ofproto.OFPP_FLOOD  # if no port found, return flood port
+
+    def sendto_controller(self, event):  # initial installation of table miss flow
+        datapath = event.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        match = parser.OFPMatch()  # match all packets
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]  # send to controller
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        mod = parser.OFPFlowMod(datapath=datapath, priority=0, match=match, instructions=inst)
+        datapath.send_msg(mod)
+
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None):  # add flow entry
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        idle_timeout = 45  # idle-timeout set to 45 seconds
+        hard_timeout = 45
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]  # forming instructions
+
+        if buffer_id:
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, priority=priority, idle_timeout=idle_timeout, hard_timeout=hard_timeout, match=match, instructions=inst)
+        else:
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, idle_timeout=idle_timeout, hard_timeout=hard_timeout, instructions=inst)
+
+        self.logger.info("added flow for %s", mod)
+        datapath.send_msg(mod)
+
+    #### Request the packet to be forwarded onto a specific port from the switch ###
+    def switchport_out(self, pkt, datapath, port):  # accept raw data, serialize it and send packet-out from a switch
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        pkt.serialize()  # serialize packet (convert raw data)
+        self.logger.info("packet-out %s" % (pkt,))
+        data = pkt.data
+        actions = [parser.OFPActionOutput(port=port)]  # define output action
+        out = parser.OFPPacketOut(datapath=datapath, buffer_id=ofproto.OFP_NO_BUFFER, in_port=ofproto.OFPP_CONTROLLER, actions=actions, data=data)
+        datapath.send_msg(out)
+
+    def simplematch(self, parser, src, dst, in_port):
+        match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)  # create match for flow entry
+        return match
