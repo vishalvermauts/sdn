@@ -100,16 +100,29 @@ class SimpleSwitchController(ControllerBase):
         except Exception:
             return Response(status=400)
 
-    @route('simpleswitch', '/simpleswitch/mactable/{dpid}', methods=['DELETE'],
-           requirements={'dpid': dpid_lib.DPID_PATTERN})
-    def delete_mac_entry(self, req, **kwargs):
-        dpid = kwargs['dpid']
-        try:
-            entry = eval(req.body)
-            self.simple_switch_app.del_mac_table_entry(dpid, entry)
-            return Response(status=200)
-        except Exception:
-            return Response(status=400)
+ @route('simpleswitch', url, methods=['DELETE'],
+       requirements={'dpid': dpid_lib.DPID_PATTERN})
+def del_mac_table_entry(self, req, **kwargs):
+
+    simple_switch = self.simple_switch_app
+    dpid = kwargs['dpid']
+
+    try:
+        entry = req.json if req.body else {}
+
+    except ValueError:
+        raise Response(status=400)
+
+    if dpid not in simple_switch.mac_to_port:
+        return Response(status=404)
+
+    try:
+        mac_table = simple_switch.del_mac_table_entry(dpid, entry)
+        body = json.dumps(mac_table)
+        return Response(content_type='application/json', text=body)
+    except Exception as e:
+        return Response(status=500)
+
 
 from webob import Response
 
